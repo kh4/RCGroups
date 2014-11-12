@@ -51,7 +51,7 @@ class RCGroups(callbacks.Plugin):
         self.__parent = super(RCGroups, self)
         self.__parent.__init__(irc)
         self.xmlrpc = ServerProxy(APIURL)
-        self.lastSeen = {}
+        self.lastseen = {}
         self.irc = irc
         # following is workaround for hanging timer
         try:
@@ -65,19 +65,20 @@ class RCGroups(callbacks.Plugin):
         if tochannel:
             irc = self.irc
             server = self.xmlrpc
+            lastseen = self.lastseen
             if tochannel in irc.state.channels:
                 for rcgthread in self.registryValue('watchedThreads').split():
-                    response = server.get_thread(rcgthread,0,0)
-                    lastPost = response.get('total_post_num')
-                    if (rcgthread in self.lastSeen):
-                        if (lastPost > self.lastSeen[rcgthread]):
-                            response = server.get_thread(rcgthread, self.lastSeen[rcgthread], lastPost)
+                    response = server.get_thread(rcgthread, 0, 0)
+                    lastpost = response.get('total_post_num')
+                    if rcgthread in lastseen:
+                        if lastpost > lastseen[rcgthread]:
+                            response = server.get_thread(rcgthread, lastseen[rcgthread], lastpost)
                             for post in response.get('posts'):
                                 message = "New post in '%s' by %s: %sp=%s" % (response.get('topic_title').data, post.get('post_author_name').data, POSTURL, post.get('post_id'))
                                 irc.queueMsg(ircmsgs.privmsg(tochannel, message))
-                            self.lastSeen[rcgthread] = lastPost
+                            lastseen[rcgthread] = lastpost
                     else:
-                        self.lastSeen[rcgthread] = lastPost
+                        lastseen[rcgthread] = lastpost
         self._schedule_next_event()
 
     def _schedule_next_event(self):
