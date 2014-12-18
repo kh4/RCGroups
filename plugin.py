@@ -36,7 +36,7 @@ import supybot.ircutils as ircutils
 import supybot.callbacks as callbacks
 import supybot.schedule as schedule
 import supybot.world as world
-
+import supybot.log as log
 from xmlrpclib import ServerProxy
 import time
 
@@ -60,25 +60,44 @@ class RCGroups(callbacks.Plugin):
             pass
         self._schedule_next_event()
 
+    def rcgstatus(self, irc, msgs, args):
+        """takes no arguments
+
+        Returns the next random number from the random number generator.
+        """
+        for rcgthread in self.registryValue('watchedThreads').split():
+            if rcgthread in self.lastseen:
+                message = "Thread %s last seen post %s" % (rcgthread, self.lastseen[rcgthread])
+                irc.reply(message)
+            else:
+                message = "Thread %s not seen??" % (rcgthread)
+                irc.reply(message)
+    rcgstatus = wrap(rcgstatus)
+
     def _poll(self):
-        tochannel = self.registryValue('postChannel')
-        if tochannel:
-            irc = self.irc
-            server = self.xmlrpc
-            lastseen = self.lastseen
-            if tochannel in irc.state.channels:
-                for rcgthread in self.registryValue('watchedThreads').split():
-                    response = server.get_thread(rcgthread, 0, 0)
-                    lastpost = response.get('total_post_num')
-                    if rcgthread in lastseen:
-                        if lastpost > lastseen[rcgthread]:
-                            response = server.get_thread(rcgthread, lastseen[rcgthread], lastpost)
-                            for post in response.get('posts'):
-                                message = "New post in '%s' by %s: %sp=%s" % (response.get('topic_title').data, post.get('post_author_name').data, POSTURL, post.get('post_id'))
-                                irc.queueMsg(ircmsgs.privmsg(tochannel, message))
+        try:
+            tochannel = self.registryValue('postChannel')
+            if tochannel:
+                irc = self.irc
+                server = self.xmlrpc
+                lastseen = self.lastseen
+                if tochannel in irc.state.channels:
+                    for rcgthread in self.registryValue('watchedThreads').split():
+                        response = server.get_thread(rcgthread, 0, 0)
+                        lastpost = response.get('total_post_num')
+                        if rcgthread in lastseen:
+                            if lastpost > lastseen[rcgthread]:
+                                log.info("New posts in %s" % (rcgthread))
+                                response = server.get_thread(rcgthread, lastseen[rcgthread], lastpost)
+                                for post in response.get('posts'):
+                                    log.info("Posting about %s:%s on %s" % (rcgthread, post.get('post_id'), tochannel))
+                                    message = "New post in '%s' by %s: %sp=%s" % (response.get('topic_title').data, post.get('post_author_name').data, POSTURL, post.get('post_id'))
+                                    irc.queueMsg(ircmsgs.privmsg(tochannel, message))
+                                lastseen[rcgthread] = lastpost
+                        else:
                             lastseen[rcgthread] = lastpost
-                    else:
-                        lastseen[rcgthread] = lastpost
+        except:
+            pass
         self._schedule_next_event()
 
     def _schedule_next_event(self):
